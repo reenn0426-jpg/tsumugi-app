@@ -268,6 +268,7 @@ service cloud.firestore {
   <button class="tab" onclick="showTab('daily',this)">日別</button>
   <button class="tab" onclick="showTab('monthly',this)">月別</button>
   <button class="tab" onclick="showTab('staff',this)">スタッフ</button>
+  <button class="tab" onclick="showTab('backup',this)">バックアップ</button>
 </div>
 
 <main>
@@ -474,6 +475,26 @@ service cloud.firestore {
     <div class="card">
       <div class="card-title">メニュー別件数</div>
       <div class="bar-chart" id="menu-chart"></div>
+    </div>
+  </div>
+
+  <!-- バックアップ -->
+  <div class="section" id="sec-backup">
+    <div class="card">
+      <div class="card-title">データバックアップ</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">売上データをCSVファイルとしてダウンロードできます。月に一度を目安に保存しておくことをおすすめします。</p>
+      <button class="btn" onclick="exportCSV('all')" style="width:100%;margin-bottom:12px;">全データをCSVで保存</button>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <select id="backup-year" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></select>
+        <select id="backup-month" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;">
+          <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
+          <option value="04">4月</option><option value="05">5月</option><option value="06">6月</option>
+          <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
+          <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+        </select>
+        <button class="btn" onclick="exportCSV('month')" style="flex:1;">月別保存</button>
+      </div>
+      <div id="backup-result" style="font-size:13px;color:var(--accent);min-height:20px;"></div>
     </div>
   </div>
 
@@ -874,6 +895,7 @@ function showTab(name, el) {
   if (name === 'daily')   renderDaily();
   if (name === 'monthly') renderMonthly();
   if (name === 'staff')   renderStaff();
+  if (name === 'backup')  initBackupYears();
 }
 
 // ============================================================
@@ -1700,6 +1722,62 @@ function showToast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// バックアップ用年セレクトを初期化
+function initBackupYears() {
+  const sel = document.getElementById('backup-year');
+  if (!sel) return;
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear; y >= thisYear - 3; y--) {
+    const opt = document.createElement('option');
+    opt.value = String(y);
+    opt.textContent = y + '年';
+    sel.appendChild(opt);
+  }
+  sel.value = String(thisYear);
+  document.getElementById('backup-month').value =
+    String(new Date().getMonth() + 1).padStart(2, '0');
+}
+
+function exportCSV(mode) {
+  if (!records || records.length === 0) {
+    document.getElementById('backup-result').textContent = 'データがありません';
+    return;
+  }
+  let data = records;
+  let filename = 'tsumugi_全データ_' + new Date().toISOString().slice(0, 10) + '.csv';
+  if (mode === 'month') {
+    const y = document.getElementById('backup-year').value;
+    const m = document.getElementById('backup-month').value;
+    const ym = y + '-' + m;
+    data = records.filter(r => r.date && r.date.startsWith(ym));
+    filename = 'tsumugi_' + y + '年' + parseInt(m) + '月_' + new Date().toISOString().slice(0, 10) + '.csv';
+    if (data.length === 0) {
+      document.getElementById('backup-result').textContent = y + '年' + parseInt(m) + '月のデータがありません';
+      return;
+    }
+  }
+  const header = ['日付', 'スタッフ', 'お客様名', 'メニュー', '金額', '税額', '支払方法', '次回予約'];
+  const rows = data.map(r => [
+    r.date || '',
+    r.staff || '',
+    r.client || '',
+    r.menu || '',
+    r.amount || 0,
+    r.tax || 0,
+    r.payment || '現金',
+    r.nextResv || ''
+  ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
+  const csv = '﻿' + header.join(',') + '\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  document.getElementById('backup-result').textContent = data.length + '件をダウンロードしました';
 }
 
 </script>
