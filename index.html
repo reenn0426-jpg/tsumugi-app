@@ -375,6 +375,8 @@ service cloud.firestore {
           <option value="現金">💴 現金</option>
           <option value="クレジットカード">💳 クレジットカード</option>
           <option value="PayPay・電子マネー">📱 PayPay・電子マネー</option>
+          <option value="BASEつむぎ">🛍 BASEつむぎ</option>
+          <option value="BASEちきゅらば">🛍 BASEちきゅらば</option>
         </select>
       </div>
       <button class="checkout-btn" id="btn-checkout" onclick="checkout()" disabled>会計する →</button>
@@ -459,6 +461,10 @@ service cloud.firestore {
       <div class="card-title">消費税率内訳</div>
       <div id="tax-breakdown"></div>
     </div>
+    <div class="card">
+      <div class="card-title">売上集計表</div>
+      <div id="sales-summary-table"></div>
+    </div>
   </div>
 
   <!-- スタッフ -->
@@ -482,8 +488,8 @@ service cloud.firestore {
   <div class="section" id="sec-backup">
     <div class="card">
       <div class="card-title">データバックアップ</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">売上データをCSVファイルとしてダウンロードできます。月に一度を目安に保存しておくことをおすすめします。</p>
-      <button class="btn" onclick="exportCSV('all')" style="width:100%;margin-bottom:12px;">全データをCSVで保存</button>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">売上集計表（金種別・税種別）をCSVファイルとしてダウンロードできます。</p>
+      <button class="btn" onclick="exportCSV('all')" style="width:100%;margin-bottom:12px;">全期間 集計表CSVで保存</button>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
         <select id="backup-year" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></select>
         <select id="backup-month" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;">
@@ -492,7 +498,7 @@ service cloud.firestore {
           <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
           <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
         </select>
-        <button class="btn" onclick="exportCSV('month')" style="flex:1;">月別保存</button>
+        <button class="btn" onclick="exportCSV('month')" style="flex:1;">月別 集計表CSV</button>
       </div>
       <div id="backup-result" style="font-size:13px;color:var(--accent);min-height:20px;"></div>
     </div>
@@ -1578,9 +1584,9 @@ function renderMonthly() {
     </div>`).join('');
 
   // 支払い方法内訳
-  const paymentMethods = ['現金', 'クレジットカード', 'PayPay・電子マネー'];
-  const payColors = { '現金': '#8b5e3c', 'クレジットカード': '#4a7c59', 'PayPay・電子マネー': '#6c5ce7' };
-  const payIcons  = { '現金': '💴', 'クレジットカード': '💳', 'PayPay・電子マネー': '📱' };
+  const paymentMethods = ['現金', 'クレジットカード', 'PayPay・電子マネー', 'BASEつむぎ', 'BASEちきゅらば'];
+  const payColors = { '現金': '#8b5e3c', 'クレジットカード': '#4a7c59', 'PayPay・電子マネー': '#6c5ce7', 'BASEつむぎ': '#e17055', 'BASEちきゅらば': '#00b894' };
+  const payIcons  = { '現金': '💴', 'クレジットカード': '💳', 'PayPay・電子マネー': '📱', 'BASEつむぎ': '🛍', 'BASEちきゅらば': '🛍' };
   const payTotals = {};
   paymentMethods.forEach(p => { payTotals[p] = 0; });
   mR.forEach(r => {
@@ -1632,12 +1638,92 @@ function renderMonthly() {
         const v = payTotals[p] || 0;
         const cnt = mR.filter(r => (r.payment || '現金') === p).length;
         return `<div class="bar-row">
-          <div class="bar-label" style="width:90px;text-align:left;font-size:10px;">${payIcons[p]} ${p}</div>
+          <div class="bar-label" style="width:110px;text-align:left;font-size:10px;">${payIcons[p]} ${p}</div>
           <div class="bar-wrap"><div class="bar-fill" style="width:${Math.max(v / maxP * 100, v > 0 ? 4 : 0)}%;background:${payColors[p]};">
             ${v > 0 ? '<span>' + fmt(v) + '(' + cnt + '件)</span>' : ''}
           </div></div>
         </div>`;
       }).join('');
+
+  // 売上集計表（金種別・税種別）
+  if (document.getElementById('sales-summary-table')) {
+    const payCountMap = {};
+    paymentMethods.forEach(p => { payCountMap[p] = 0; });
+    mR.forEach(r => { const k = r.payment || '現金'; payCountMap[k] = (payCountMap[k] || 0) + 1; });
+    const grandTotal = mR.reduce((s, r) => s + (r.amount || 0), 0);
+    const grandCount = mR.length;
+
+    const tblStyle = 'width:100%;border-collapse:collapse;font-size:13px;';
+    const thStyle  = 'background:var(--accent-light);color:var(--accent);padding:6px 8px;text-align:left;border-bottom:2px solid var(--accent);';
+    const tdStyle  = 'padding:6px 8px;border-bottom:1px solid var(--border);';
+    const tdRight  = tdStyle + 'text-align:right;font-family:"DM Mono",monospace;';
+    const trFoot   = 'background:var(--accent-light);font-weight:600;';
+
+    // 金種別
+    let payRows = paymentMethods.map(p => {
+      const v = payTotals[p] || 0;
+      const c = payCountMap[p] || 0;
+      return `<tr><td style="${tdStyle}">${payIcons[p]} ${p}</td><td style="${tdRight}">${c}件</td><td style="${tdRight}">${fmt(v)}</td></tr>`;
+    }).join('');
+    payRows += `<tr style="${trFoot}"><td style="${tdStyle}">合計</td><td style="${tdRight}">${grandCount}件</td><td style="${tdRight}">${fmt(grandTotal)}</td></tr>`;
+
+    // 税種別
+    const taxTotals = {};
+    const taxCounts = {};
+    mR.forEach(r => {
+      if (r.items && r.items.length) {
+        const counted = new Set();
+        r.items.forEach(it => {
+          const rate = (typeof it.taxRate === 'number') ? it.taxRate : (typeof r.tax === 'number' ? r.tax : 10);
+          if (!taxTotals[rate]) { taxTotals[rate] = 0; taxCounts[rate] = 0; }
+          taxTotals[rate] += it.price || 0;
+          if (!counted.has(rate)) { taxCounts[rate]++; counted.add(rate); }
+        });
+      } else {
+        const rate = (typeof r.tax === 'number' && r.tax !== null) ? r.tax : 10;
+        if (!taxTotals[rate]) { taxTotals[rate] = 0; taxCounts[rate] = 0; }
+        taxTotals[rate] += r.amount || 0;
+        taxCounts[rate]++;
+      }
+    });
+    const ratesSorted2 = Object.keys(taxTotals).map(Number).sort((a, b) => b - a);
+    let taxRows = ratesSorted2.map(rate => {
+      const inc = taxTotals[rate];
+      const taxAmt = rate > 0 ? Math.round(inc - inc / (1 + rate / 100)) : 0;
+      const exc = inc - taxAmt;
+      const lbl = rate === 8 ? '軽減税率 8%' : (rate === 0 ? '非課税 0%' : `標準税率 ${rate}%`);
+      return `<tr><td style="${tdStyle}">${lbl}</td><td style="${tdRight}">${taxCounts[rate]}件</td><td style="${tdRight}">${fmt(inc)}</td><td style="${tdRight}">${fmt(taxAmt)}</td><td style="${tdRight}">${fmt(exc)}</td></tr>`;
+    }).join('');
+    const grandTaxAmt = ratesSorted2.reduce((s, r) => s + (r > 0 ? Math.round(taxTotals[r] - taxTotals[r] / (1 + r / 100)) : 0), 0);
+    taxRows += `<tr style="${trFoot}"><td style="${tdStyle}">合計</td><td style="${tdRight}">${grandCount}件</td><td style="${tdRight}">${fmt(grandTotal)}</td><td style="${tdRight}">${fmt(grandTaxAmt)}</td><td style="${tdRight}">${fmt(grandTotal - grandTaxAmt)}</td></tr>`;
+
+    document.getElementById('sales-summary-table').innerHTML = mR.length === 0
+      ? '<div class="empty-msg">データがありません</div>'
+      : `<div style="margin-bottom:14px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;">金種別集計</div>
+          <table style="${tblStyle}">
+            <thead><tr>
+              <th style="${thStyle}">支払方法</th>
+              <th style="${thStyle}text-align:right;">件数</th>
+              <th style="${thStyle}text-align:right;">金額（税込）</th>
+            </tr></thead>
+            <tbody>${payRows}</tbody>
+          </table>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;">税種別集計</div>
+          <table style="${tblStyle}">
+            <thead><tr>
+              <th style="${thStyle}">税区分</th>
+              <th style="${thStyle}text-align:right;">件数</th>
+              <th style="${thStyle}text-align:right;">税込金額</th>
+              <th style="${thStyle}text-align:right;">消費税額</th>
+              <th style="${thStyle}text-align:right;">税抜金額</th>
+            </tr></thead>
+            <tbody>${taxRows}</tbody>
+          </table>
+        </div>`;
+  }
 }
 
 // ============================================================
@@ -1746,30 +1832,81 @@ function exportCSV(mode) {
     return;
   }
   let data = records;
-  let filename = 'tsumugi_全データ_' + new Date().toISOString().slice(0, 10) + '.csv';
+  let periodLabel = '全期間';
+  let filename = 'tsumugi_集計表_全期間_' + new Date().toISOString().slice(0, 10) + '.csv';
   if (mode === 'month') {
     const y = document.getElementById('backup-year').value;
     const m = document.getElementById('backup-month').value;
     const ym = y + '-' + m;
     data = records.filter(r => r.date && r.date.startsWith(ym));
-    filename = 'tsumugi_' + y + '年' + parseInt(m) + '月_' + new Date().toISOString().slice(0, 10) + '.csv';
+    periodLabel = y + '年' + parseInt(m) + '月';
+    filename = 'tsumugi_集計表_' + y + '年' + parseInt(m) + '月_' + new Date().toISOString().slice(0, 10) + '.csv';
     if (data.length === 0) {
       document.getElementById('backup-result').textContent = y + '年' + parseInt(m) + '月のデータがありません';
       return;
     }
   }
-  const header = ['日付', 'スタッフ', 'お客様名', 'メニュー', '金額', '税額', '支払方法', '次回予約'];
-  const rows = data.map(r => [
-    r.date || '',
-    r.staff || '',
-    r.client || '',
-    r.menu || '',
-    r.amount || 0,
-    r.tax || 0,
-    r.payment || '現金',
-    r.nextResv || ''
-  ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
-  const csv = '﻿' + header.join(',') + '\n' + rows.join('\n');
+
+  const allMethods = ['現金', 'クレジットカード', 'PayPay・電子マネー', 'BASEつむぎ', 'BASEちきゅらば'];
+
+  // 金種別集計
+  const payTotals = {};
+  const payCounts = {};
+  allMethods.forEach(p => { payTotals[p] = 0; payCounts[p] = 0; });
+  data.forEach(r => {
+    const k = r.payment || '現金';
+    payTotals[k] = (payTotals[k] || 0) + (r.amount || 0);
+    payCounts[k] = (payCounts[k] || 0) + 1;
+  });
+  const grandTotal = data.reduce((s, r) => s + (r.amount || 0), 0);
+  const grandCount = data.length;
+
+  // 税種別集計
+  const taxTotals = {};
+  const taxCounts = {};
+  data.forEach(r => {
+    if (r.items && r.items.length) {
+      const counted = new Set();
+      r.items.forEach(it => {
+        const rate = (typeof it.taxRate === 'number') ? it.taxRate : (typeof r.tax === 'number' ? r.tax : 10);
+        if (!taxTotals[rate]) { taxTotals[rate] = 0; taxCounts[rate] = 0; }
+        taxTotals[rate] += it.price || 0;
+        if (!counted.has(rate)) { taxCounts[rate]++; counted.add(rate); }
+      });
+    } else {
+      const rate = (typeof r.tax === 'number' && r.tax !== null) ? r.tax : 10;
+      if (!taxTotals[rate]) { taxTotals[rate] = 0; taxCounts[rate] = 0; }
+      taxTotals[rate] += r.amount || 0;
+      taxCounts[rate]++;
+    }
+  });
+  const ratesSorted = Object.keys(taxTotals).map(Number).sort((a, b) => b - a);
+
+  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const rows = [];
+
+  rows.push(q('【売上集計表】') + ',' + q(periodLabel));
+  rows.push('');
+  rows.push(q('【金種別集計】'));
+  rows.push([q('支払方法'), q('件数'), q('金額（税込）')].join(','));
+  allMethods.forEach(p => {
+    rows.push([q(p), q(payCounts[p] + '件'), q(payTotals[p])].join(','));
+  });
+  rows.push([q('合計'), q(grandCount + '件'), q(grandTotal)].join(','));
+  rows.push('');
+  rows.push(q('【税種別集計】'));
+  rows.push([q('税区分'), q('件数'), q('税込金額'), q('消費税額'), q('税抜金額')].join(','));
+  ratesSorted.forEach(rate => {
+    const inc = taxTotals[rate];
+    const taxAmt = rate > 0 ? Math.round(inc - inc / (1 + rate / 100)) : 0;
+    const exc = inc - taxAmt;
+    const lbl = rate === 8 ? '軽減税率 8%' : (rate === 0 ? '非課税 0%' : '標準税率 ' + rate + '%');
+    rows.push([q(lbl), q(taxCounts[rate] + '件'), q(inc), q(taxAmt), q(exc)].join(','));
+  });
+  const grandTaxAmt = ratesSorted.reduce((s, r) => s + (r > 0 ? Math.round(taxTotals[r] - taxTotals[r] / (1 + r / 100)) : 0), 0);
+  rows.push([q('合計'), q(grandCount + '件'), q(grandTotal), q(grandTaxAmt), q(grandTotal - grandTaxAmt)].join(','));
+
+  const csv = '﻿' + rows.join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1777,9 +1914,10 @@ function exportCSV(mode) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-  document.getElementById('backup-result').textContent = data.length + '件をダウンロードしました';
+  document.getElementById('backup-result').textContent = periodLabel + 'の集計表をダウンロードしました（' + grandCount + '件分）';
 }
 
 </script>
 </body>
 </html>
+
