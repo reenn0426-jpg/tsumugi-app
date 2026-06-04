@@ -1729,58 +1729,95 @@ function renderMonthly() {
         </div>`;
   }
 
-  // 日別売上一覧
-  const dailyMap = {};
+  // 日別売上一覧（金種別・税率別）
+  const allPayMethods2 = ['現金', 'クレジットカード', 'PayPay・電子マネー', 'BASEつむぎ', 'BASEちきゅらば'];
+  const payIcons2 = { '現金': '💴', 'クレジットカード': '💳', 'PayPay・電子マネー': '📱', 'BASEつむぎ': '🛍', 'BASEちきゅらば': '🛍' };
+  // payDayData[payMethod][date] = { count, tax10, tax8, tax0, total }
+  const payDayData = {};
+  allPayMethods2.forEach(p => { payDayData[p] = {}; });
   mR.forEach(r => {
     if (!r.date) return;
-    if (!dailyMap[r.date]) dailyMap[r.date] = { amount: 0, count: 0 };
-    dailyMap[r.date].amount += r.amount || 0;
-    dailyMap[r.date].count  += 1;
+    const pay = r.payment || '現金';
+    if (!payDayData[pay]) payDayData[pay] = {};
+    if (!payDayData[pay][r.date]) payDayData[pay][r.date] = { count: 0, tax10: 0, tax8: 0, tax0: 0, total: 0 };
+    const d = payDayData[pay][r.date];
+    d.count++;
+    d.total += r.amount || 0;
+    if (r.items && r.items.length) {
+      r.items.forEach(it => {
+        const rate = typeof it.taxRate === 'number' ? it.taxRate : (typeof r.tax === 'number' ? r.tax : 10);
+        if (rate === 8) d.tax8 += it.price || 0;
+        else if (rate === 0) d.tax0 += it.price || 0;
+        else d.tax10 += it.price || 0;
+      });
+    } else {
+      const rate = typeof r.tax === 'number' && r.tax !== null ? r.tax : 10;
+      if (rate === 8) d.tax8 += r.amount || 0;
+      else if (rate === 0) d.tax0 += r.amount || 0;
+      else d.tax10 += r.amount || 0;
+    }
   });
-  const sortedDays = Object.keys(dailyMap).sort();
-  const maxDay = Math.max(...sortedDays.map(d => dailyMap[d].amount), 1);
-  const tblStyle2 = 'width:100%;border-collapse:collapse;font-size:13px;';
-  const thStyle2  = 'background:var(--accent-light);color:var(--accent);padding:6px 8px;text-align:left;border-bottom:2px solid var(--accent);font-weight:600;';
-  const tdStyle2  = 'padding:6px 8px;border-bottom:1px solid var(--border);';
-  const tdRight2  = tdStyle2 + 'text-align:right;font-family:"DM Mono",monospace;';
-  const trFoot2   = 'background:var(--accent-light);font-weight:600;';
-  const dayTotal  = sortedDays.reduce((s, d) => s + dailyMap[d].amount, 0);
-  const dayCount  = sortedDays.reduce((s, d) => s + dailyMap[d].count, 0);
 
-  const dayRows = sortedDays.map(d => {
-    const dt = new Date(d);
-    const weekDay = ['日','月','火','水','木','金','土'][dt.getDay()];
-    const color = dt.getDay() === 0 ? 'color:#e17055;' : (dt.getDay() === 6 ? 'color:#0984e3;' : '');
-    const barW = Math.max(dailyMap[d].amount / maxDay * 100, 4);
-    return `<tr>
-      <td style="${tdStyle2}${color}font-weight:500;">${parseInt(d.slice(5,7))}/${parseInt(d.slice(8,10))}（${weekDay}）</td>
-      <td style="${tdRight2}">${dailyMap[d].count}件</td>
-      <td style="${tdRight2}">${fmt(dailyMap[d].amount)}</td>
-      <td style="${tdStyle2}">
-        <div style="background:var(--border);border-radius:3px;height:8px;overflow:hidden;">
-          <div style="background:var(--green);width:${barW}%;height:8px;border-radius:3px;"></div>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
+  const tS2  = 'width:100%;border-collapse:collapse;font-size:12px;';
+  const tH2  = 'background:var(--accent-light);color:var(--accent);padding:5px 8px;text-align:right;border-bottom:2px solid var(--accent);font-weight:600;white-space:nowrap;';
+  const tHL2 = tH2.replace('text-align:right;', 'text-align:left;');
+  const tD2  = 'padding:5px 8px;border-bottom:1px solid var(--border);text-align:right;font-family:"DM Mono",monospace;font-size:12px;white-space:nowrap;';
+  const tDL2 = 'padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px;white-space:nowrap;';
+  const tF2  = 'background:var(--accent-light);font-weight:600;';
+
+  let dailyHtml = '';
+  allPayMethods2.forEach(pay => {
+    const dayData = payDayData[pay];
+    const days = Object.keys(dayData).sort();
+    if (days.length === 0) return;
+    const sumCount = days.reduce((s, d) => s + dayData[d].count, 0);
+    const sum10    = days.reduce((s, d) => s + dayData[d].tax10,  0);
+    const sum8     = days.reduce((s, d) => s + dayData[d].tax8,   0);
+    const sum0     = days.reduce((s, d) => s + dayData[d].tax0,   0);
+    const sumTotal = days.reduce((s, d) => s + dayData[d].total,  0);
+    const has0     = sum0 > 0;
+    const rows2 = days.map(d => {
+      const dt = new Date(d);
+      const wd = ['日','月','火','水','木','金','土'][dt.getDay()];
+      const wc = dt.getDay() === 0 ? 'color:#e17055;' : (dt.getDay() === 6 ? 'color:#0984e3;' : '');
+      return `<tr>
+        <td style="${tDL2}${wc}font-weight:500;">${parseInt(d.slice(5,7))}/${parseInt(d.slice(8,10))}（${wd}）</td>
+        <td style="${tD2}">${dayData[d].count}件</td>
+        <td style="${tD2}">${dayData[d].tax10 > 0 ? fmt(dayData[d].tax10) : '-'}</td>
+        <td style="${tD2}">${dayData[d].tax8  > 0 ? fmt(dayData[d].tax8)  : '-'}</td>
+        ${has0 ? `<td style="${tD2}">${dayData[d].tax0 > 0 ? fmt(dayData[d].tax0) : '-'}</td>` : ''}
+        <td style="${tD2}font-weight:600;">${fmt(dayData[d].total)}</td>
+      </tr>`;
+    }).join('');
+    dailyHtml += `<div style="margin-bottom:22px;">
+      <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;">${payIcons2[pay] || '💰'} ${pay}</div>
+      <div style="overflow-x:auto;">
+      <table style="${tS2}">
+        <thead><tr>
+          <th style="${tHL2}">日付</th>
+          <th style="${tH2}">件数</th>
+          <th style="${tH2}">10%（税込）</th>
+          <th style="${tH2}">8%（税込）</th>
+          ${has0 ? `<th style="${tH2}">非課税</th>` : ''}
+          <th style="${tH2}">合計</th>
+        </tr></thead>
+        <tbody>${rows2}</tbody>
+        <tfoot><tr style="${tF2}">
+          <td style="${tDL2}">合計（${days.length}日）</td>
+          <td style="${tD2}">${sumCount}件</td>
+          <td style="${tD2}">${sum10 > 0 ? fmt(sum10) : '-'}</td>
+          <td style="${tD2}">${sum8  > 0 ? fmt(sum8)  : '-'}</td>
+          ${has0 ? `<td style="${tD2}">${fmt(sum0)}</td>` : ''}
+          <td style="${tD2}font-weight:600;">${fmt(sumTotal)}</td>
+        </tr></tfoot>
+      </table>
+      </div>
+    </div>`;
+  });
 
   document.getElementById('daily-summary-list').innerHTML = mR.length === 0
     ? '<div class="empty-msg">データがありません</div>'
-    : `<table style="${tblStyle2}">
-        <thead><tr>
-          <th style="${thStyle2}">日付</th>
-          <th style="${thStyle2}text-align:right;">件数</th>
-          <th style="${thStyle2}text-align:right;">売上合計</th>
-          <th style="${thStyle2}"></th>
-        </tr></thead>
-        <tbody>${dayRows}</tbody>
-        <tfoot><tr style="${trFoot2}">
-          <td style="${tdStyle2}">合計（${sortedDays.length}日）</td>
-          <td style="${tdRight2}">${dayCount}件</td>
-          <td style="${tdRight2}">${fmt(dayTotal)}</td>
-          <td style="${tdStyle2}"></td>
-        </tr></tfoot>
-      </table>`;
+    : (dailyHtml || '<div class="empty-msg">データがありません</div>');
 }
 
 // ============================================================
