@@ -166,6 +166,23 @@
   .product-item { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); gap: 8px; font-size: 13px; }
   .product-item:last-child { border-bottom: none; }
   .product-delete { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px; }
+
+  /* 小口現金 */
+  .petty-balance { text-align: center; padding: 20px 0 16px; }
+  .petty-balance-label { font-size: 11px; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 6px; }
+  .petty-balance-value { font-family: 'DM Mono', monospace; font-size: 36px; }
+  .petty-type-btns { display: flex; gap: 8px; margin-bottom: 14px; }
+  .petty-type-btn { flex: 1; padding: 10px; border: 2px solid var(--border); border-radius: 8px; background: var(--bg); font-family: 'Noto Serif JP', serif; font-size: 14px; cursor: pointer; transition: all 0.15s; color: var(--muted); }
+  .petty-type-btn.active-in { border-color: var(--green); background: var(--green-light); color: var(--green); font-weight: 600; }
+  .petty-type-btn.active-out { border-color: var(--accent); background: var(--accent-light); color: var(--accent); font-weight: 600; }
+  .petty-entry { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); gap: 10px; }
+  .petty-entry:last-child { border-bottom: none; }
+  .petty-entry-date { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); width: 40px; flex-shrink: 0; }
+  .petty-entry-memo { flex: 1; font-size: 13px; line-height: 1.4; }
+  .petty-entry-amount { font-family: 'DM Mono', monospace; font-size: 14px; flex-shrink: 0; }
+  .petty-entry-amount.in { color: var(--green); }
+  .petty-entry-amount.out { color: var(--accent); }
+  .petty-entry-delete { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px; }
 </style>
 </head>
 <body>
@@ -269,6 +286,7 @@ service cloud.firestore {
   <button class="tab" onclick="showTab('monthly',this)">月別</button>
   <button class="tab" onclick="showTab('staff',this)">スタッフ</button>
   <button class="tab" onclick="showTab('backup',this)">バックアップ</button>
+  <button class="tab" onclick="showTab('petty',this)">小口現金</button>
 </div>
 
 <main>
@@ -375,8 +393,6 @@ service cloud.firestore {
           <option value="現金">💴 現金</option>
           <option value="クレジットカード">💳 クレジットカード</option>
           <option value="PayPay・電子マネー">📱 PayPay・電子マネー</option>
-          <option value="BASEつむぎ">🛍 BASEつむぎ</option>
-          <option value="BASEちきゅらば">🛍 BASEちきゅらば</option>
         </select>
       </div>
       <button class="checkout-btn" id="btn-checkout" onclick="checkout()" disabled>会計する →</button>
@@ -461,14 +477,6 @@ service cloud.firestore {
       <div class="card-title">消費税率内訳</div>
       <div id="tax-breakdown"></div>
     </div>
-    <div class="card">
-      <div class="card-title">売上集計表</div>
-      <div id="sales-summary-table"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">日別売上一覧</div>
-      <div id="daily-summary-list"></div>
-    </div>
   </div>
 
   <!-- スタッフ -->
@@ -492,8 +500,8 @@ service cloud.firestore {
   <div class="section" id="sec-backup">
     <div class="card">
       <div class="card-title">データバックアップ</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">売上集計表（金種別・税種別）をCSVファイルとしてダウンロードできます。</p>
-      <button class="btn" onclick="exportCSV('all')" style="width:100%;margin-bottom:12px;">全期間 集計表CSVで保存</button>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">売上データをCSVファイルとしてダウンロードできます。月に一度を目安に保存しておくことをおすすめします。</p>
+      <button class="btn" onclick="exportCSV('all')" style="width:100%;margin-bottom:12px;">全データをCSVで保存</button>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
         <select id="backup-year" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></select>
         <select id="backup-month" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;">
@@ -502,10 +510,57 @@ service cloud.firestore {
           <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
           <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
         </select>
-        <button class="btn" onclick="exportCSV('month')" style="flex:1;">月別 集計表CSV</button>
+        <button class="btn" onclick="exportCSV('month')" style="flex:1;">月別保存</button>
       </div>
       <div id="backup-result" style="font-size:13px;color:var(--accent);min-height:20px;"></div>
     </div>
+  </div>
+
+
+  <!-- 小口現金 -->
+  <div class="section" id="sec-petty">
+
+    <!-- 残高サマリー -->
+    <div class="card">
+      <div class="petty-balance">
+        <div class="petty-balance-label">現金残高（累計）</div>
+        <div class="petty-balance-value" id="petty-balance">¥0</div>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="summary-label">今月 入金</div>
+          <div class="summary-value green" id="petty-month-in">¥0</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">今月 出金</div>
+          <div class="summary-value" id="petty-month-out">¥0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 入出金フォーム -->
+    <div class="card">
+      <div class="card-title">入出金を記録</div>
+      <div class="petty-type-btns">
+        <button class="petty-type-btn active-in" id="petty-btn-in" onclick="setPettyType('in')">＋ 入金</button>
+        <button class="petty-type-btn" id="petty-btn-out" onclick="setPettyType('out')">－ 出金</button>
+      </div>
+      <div class="form-group"><label>日付</label><input type="date" id="petty-date"></div>
+      <div class="form-group"><label>内容・メモ</label><input type="text" id="petty-memo" placeholder="例：つり銭補充、消耗品購入など"></div>
+      <div class="form-group"><label>金額</label><input type="number" id="petty-amount" placeholder="例：5000" min="0"></div>
+      <button class="btn" id="btn-petty-save" onclick="addPettyCash()">記録する</button>
+    </div>
+
+    <!-- 月別明細 -->
+    <div class="card">
+      <div class="month-nav" style="margin-bottom:12px;">
+        <button onclick="changePettyMonth(-1)">‹</button>
+        <span id="petty-month-label"></span>
+        <button onclick="changePettyMonth(1)">›</button>
+      </div>
+      <div id="petty-list"><div class="empty-msg">この月の記録はありません</div></div>
+    </div>
+
   </div>
 
 </main>
@@ -712,16 +767,19 @@ function applyMenuPrice(prefix) {
 // ============================================================
 // グローバル変数
 // ============================================================
-let db, recordsCol, resvsCol, productsCol;
+let db, recordsCol, resvsCol, productsCol, pettyCashCol;
 let records  = [];
 let resvs    = [];
+let pettyCash = [];
 let cart     = []; // POS カート
 let currentMonth = new Date();
 let staffMonth   = new Date();
 let resvMonth    = new Date();
+let pettyMonth   = new Date();
 let modalDate    = '';
 let dailyDate    = new Date(); // 日別詳細の選択日
 let currentTab   = 'input';
+let pettyType    = 'in'; // 'in' or 'out'
 
 const staffColors = { '野下圭子': 'var(--accent)', '山本くるみ': 'var(--green)' };
 const staffDot    = { '野下圭子': 's1', '山本くるみ': 's2' };
@@ -766,6 +824,7 @@ function initFirebase(config) {
     recordsCol  = db.collection('records');
     resvsCol    = db.collection('resvs');
     productsCol = db.collection('products');
+    pettyCashCol = db.collection('pettyCash');
 
     setSyncStatus('connecting');
 
@@ -793,6 +852,15 @@ function initFirebase(config) {
         if (cat && cat.value === '商品') updateSubMenu('inp', 'true');
       },
       (err) => { console.error('products sync error:', err); }
+    );
+
+    // ── 小口現金のリアルタイム同期 ──
+    pettyCashCol.orderBy('timestamp', 'asc').onSnapshot(
+      (snapshot) => {
+        pettyCash = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        if (currentTab === 'petty') renderPettyCash();
+      },
+      (err) => { console.error('pettyCash sync error:', err); }
     );
 
     // ── 予約データのリアルタイム同期 ──
@@ -825,8 +893,7 @@ function refreshCurrentView() {
   if (currentTab === 'daily')   { renderTodayList(); renderDaily(); }
   if (currentTab === 'monthly') renderMonthly();
   if (currentTab === 'staff')   renderStaff();
-  // 売上記録タブでは常に更新
-  if (currentTab === 'input')   renderTodayList();
+  if (currentTab === 'petty')   renderPettyCash();
 }
 
 // ============================================================
@@ -866,8 +933,10 @@ window.onload = function() {
   document.getElementById('today-date').textContent =
     today.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
   document.getElementById('inp-date').value  = toDateStr(today);
+  document.getElementById('petty-date').value = toDateStr(today);
   renderMonthLabel();
   renderStaffMonthLabel();
+  renderPettyMonthLabel();
 
   // Firebase 設定（設定済み）
   const builtinConfig = {
@@ -906,6 +975,7 @@ function showTab(name, el) {
   if (name === 'monthly') renderMonthly();
   if (name === 'staff')   renderStaff();
   if (name === 'backup')  initBackupYears();
+  if (name === 'petty')   { renderPettyMonthLabel(); renderPettyCash(); }
 }
 
 // ============================================================
@@ -1588,9 +1658,9 @@ function renderMonthly() {
     </div>`).join('');
 
   // 支払い方法内訳
-  const paymentMethods = ['現金', 'クレジットカード', 'PayPay・電子マネー', 'BASEつむぎ', 'BASEちきゅらば'];
-  const payColors = { '現金': '#8b5e3c', 'クレジットカード': '#4a7c59', 'PayPay・電子マネー': '#6c5ce7', 'BASEつむぎ': '#e17055', 'BASEちきゅらば': '#00b894' };
-  const payIcons  = { '現金': '💴', 'クレジットカード': '💳', 'PayPay・電子マネー': '📱', 'BASEつむぎ': '🛍', 'BASEちきゅらば': '🛍' };
+  const paymentMethods = ['現金', 'クレジットカード', 'PayPay・電子マネー'];
+  const payColors = { '現金': '#8b5e3c', 'クレジットカード': '#4a7c59', 'PayPay・電子マネー': '#6c5ce7' };
+  const payIcons  = { '現金': '💴', 'クレジットカード': '💳', 'PayPay・電子マネー': '📱' };
   const payTotals = {};
   paymentMethods.forEach(p => { payTotals[p] = 0; });
   mR.forEach(r => {
@@ -1642,182 +1712,12 @@ function renderMonthly() {
         const v = payTotals[p] || 0;
         const cnt = mR.filter(r => (r.payment || '現金') === p).length;
         return `<div class="bar-row">
-          <div class="bar-label" style="width:110px;text-align:left;font-size:10px;">${payIcons[p]} ${p}</div>
+          <div class="bar-label" style="width:90px;text-align:left;font-size:10px;">${payIcons[p]} ${p}</div>
           <div class="bar-wrap"><div class="bar-fill" style="width:${Math.max(v / maxP * 100, v > 0 ? 4 : 0)}%;background:${payColors[p]};">
             ${v > 0 ? '<span>' + fmt(v) + '(' + cnt + '件)</span>' : ''}
           </div></div>
         </div>`;
       }).join('');
-
-  // 売上集計表（金種別・税種別）
-  if (document.getElementById('sales-summary-table')) {
-    const payCountMap = {};
-    paymentMethods.forEach(p => { payCountMap[p] = 0; });
-    mR.forEach(r => { const k = r.payment || '現金'; payCountMap[k] = (payCountMap[k] || 0) + 1; });
-    const grandTotal = mR.reduce((s, r) => s + (r.amount || 0), 0);
-    const grandCount = mR.length;
-
-    const tblStyle = 'width:100%;border-collapse:collapse;font-size:13px;';
-    const thStyle  = 'background:var(--accent-light);color:var(--accent);padding:6px 8px;text-align:left;border-bottom:2px solid var(--accent);';
-    const tdStyle  = 'padding:6px 8px;border-bottom:1px solid var(--border);';
-    const tdRight  = tdStyle + 'text-align:right;font-family:"DM Mono",monospace;';
-    const trFoot   = 'background:var(--accent-light);font-weight:600;';
-
-    // 金種別
-    let payRows = paymentMethods.map(p => {
-      const v = payTotals[p] || 0;
-      const c = payCountMap[p] || 0;
-      return `<tr><td style="${tdStyle}">${payIcons[p]} ${p}</td><td style="${tdRight}">${c}件</td><td style="${tdRight}">${fmt(v)}</td></tr>`;
-    }).join('');
-    payRows += `<tr style="${trFoot}"><td style="${tdStyle}">合計</td><td style="${tdRight}">${grandCount}件</td><td style="${tdRight}">${fmt(grandTotal)}</td></tr>`;
-
-    // 税種別
-    const taxTotals = {};
-    const taxCounts = {};
-    mR.forEach(r => {
-      if (r.items && r.items.length) {
-        const counted = new Set();
-        r.items.forEach(it => {
-          const rate = (typeof it.taxRate === 'number') ? it.taxRate : (typeof r.tax === 'number' ? r.tax : 10);
-          if (!taxTotals[rate]) { taxTotals[rate] = 0; taxCounts[rate] = 0; }
-          taxTotals[rate] += it.price || 0;
-          if (!counted.has(rate)) { taxCounts[rate]++; counted.add(rate); }
-        });
-      } else {
-        const rate = (typeof r.tax === 'number' && r.tax !== null) ? r.tax : 10;
-        if (!taxTotals[rate]) { taxTotals[rate] = 0; taxCounts[rate] = 0; }
-        taxTotals[rate] += r.amount || 0;
-        taxCounts[rate]++;
-      }
-    });
-    const ratesSorted2 = Object.keys(taxTotals).map(Number).sort((a, b) => b - a);
-    let taxRows = ratesSorted2.map(rate => {
-      const inc = taxTotals[rate];
-      const taxAmt = rate > 0 ? Math.round(inc - inc / (1 + rate / 100)) : 0;
-      const exc = inc - taxAmt;
-      const lbl = rate === 8 ? '軽減税率 8%' : (rate === 0 ? '非課税 0%' : `標準税率 ${rate}%`);
-      return `<tr><td style="${tdStyle}">${lbl}</td><td style="${tdRight}">${taxCounts[rate]}件</td><td style="${tdRight}">${fmt(inc)}</td><td style="${tdRight}">${fmt(taxAmt)}</td><td style="${tdRight}">${fmt(exc)}</td></tr>`;
-    }).join('');
-    const grandTaxAmt = ratesSorted2.reduce((s, r) => s + (r > 0 ? Math.round(taxTotals[r] - taxTotals[r] / (1 + r / 100)) : 0), 0);
-    taxRows += `<tr style="${trFoot}"><td style="${tdStyle}">合計</td><td style="${tdRight}">${grandCount}件</td><td style="${tdRight}">${fmt(grandTotal)}</td><td style="${tdRight}">${fmt(grandTaxAmt)}</td><td style="${tdRight}">${fmt(grandTotal - grandTaxAmt)}</td></tr>`;
-
-    document.getElementById('sales-summary-table').innerHTML = mR.length === 0
-      ? '<div class="empty-msg">データがありません</div>'
-      : `<div style="margin-bottom:14px;">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;">金種別集計</div>
-          <table style="${tblStyle}">
-            <thead><tr>
-              <th style="${thStyle}">支払方法</th>
-              <th style="${thStyle}text-align:right;">件数</th>
-              <th style="${thStyle}text-align:right;">金額（税込）</th>
-            </tr></thead>
-            <tbody>${payRows}</tbody>
-          </table>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;">税種別集計</div>
-          <table style="${tblStyle}">
-            <thead><tr>
-              <th style="${thStyle}">税区分</th>
-              <th style="${thStyle}text-align:right;">件数</th>
-              <th style="${thStyle}text-align:right;">税込金額</th>
-              <th style="${thStyle}text-align:right;">消費税額</th>
-              <th style="${thStyle}text-align:right;">税抜金額</th>
-            </tr></thead>
-            <tbody>${taxRows}</tbody>
-          </table>
-        </div>`;
-  }
-
-  // 日別売上一覧（金種別・税率別）
-  const allPayMethods2 = ['現金', 'クレジットカード', 'PayPay・電子マネー', 'BASEつむぎ', 'BASEちきゅらば'];
-  const payIcons2 = { '現金': '💴', 'クレジットカード': '💳', 'PayPay・電子マネー': '📱', 'BASEつむぎ': '🛍', 'BASEちきゅらば': '🛍' };
-  // payDayData[payMethod][date] = { count, tax10, tax8, tax0, total }
-  const payDayData = {};
-  allPayMethods2.forEach(p => { payDayData[p] = {}; });
-  mR.forEach(r => {
-    if (!r.date) return;
-    const pay = r.payment || '現金';
-    if (!payDayData[pay]) payDayData[pay] = {};
-    if (!payDayData[pay][r.date]) payDayData[pay][r.date] = { count: 0, tax10: 0, tax8: 0, tax0: 0, total: 0 };
-    const d = payDayData[pay][r.date];
-    d.count++;
-    d.total += r.amount || 0;
-    if (r.items && r.items.length) {
-      r.items.forEach(it => {
-        const rate = typeof it.taxRate === 'number' ? it.taxRate : (typeof r.tax === 'number' ? r.tax : 10);
-        if (rate === 8) d.tax8 += it.price || 0;
-        else if (rate === 0) d.tax0 += it.price || 0;
-        else d.tax10 += it.price || 0;
-      });
-    } else {
-      const rate = typeof r.tax === 'number' && r.tax !== null ? r.tax : 10;
-      if (rate === 8) d.tax8 += r.amount || 0;
-      else if (rate === 0) d.tax0 += r.amount || 0;
-      else d.tax10 += r.amount || 0;
-    }
-  });
-
-  const tS2  = 'width:100%;border-collapse:collapse;font-size:12px;';
-  const tH2  = 'background:var(--accent-light);color:var(--accent);padding:5px 8px;text-align:right;border-bottom:2px solid var(--accent);font-weight:600;white-space:nowrap;';
-  const tHL2 = tH2.replace('text-align:right;', 'text-align:left;');
-  const tD2  = 'padding:5px 8px;border-bottom:1px solid var(--border);text-align:right;font-family:"DM Mono",monospace;font-size:12px;white-space:nowrap;';
-  const tDL2 = 'padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px;white-space:nowrap;';
-  const tF2  = 'background:var(--accent-light);font-weight:600;';
-
-  let dailyHtml = '';
-  allPayMethods2.forEach(pay => {
-    const dayData = payDayData[pay];
-    const days = Object.keys(dayData).sort();
-    if (days.length === 0) return;
-    const sumCount = days.reduce((s, d) => s + dayData[d].count, 0);
-    const sum10    = days.reduce((s, d) => s + dayData[d].tax10,  0);
-    const sum8     = days.reduce((s, d) => s + dayData[d].tax8,   0);
-    const sum0     = days.reduce((s, d) => s + dayData[d].tax0,   0);
-    const sumTotal = days.reduce((s, d) => s + dayData[d].total,  0);
-    const has0     = sum0 > 0;
-    const rows2 = days.map(d => {
-      const dt = new Date(d);
-      const wd = ['日','月','火','水','木','金','土'][dt.getDay()];
-      const wc = dt.getDay() === 0 ? 'color:#e17055;' : (dt.getDay() === 6 ? 'color:#0984e3;' : '');
-      return `<tr>
-        <td style="${tDL2}${wc}font-weight:500;">${parseInt(d.slice(5,7))}/${parseInt(d.slice(8,10))}（${wd}）</td>
-        <td style="${tD2}">${dayData[d].count}件</td>
-        <td style="${tD2}">${dayData[d].tax10 > 0 ? fmt(dayData[d].tax10) : '-'}</td>
-        <td style="${tD2}">${dayData[d].tax8  > 0 ? fmt(dayData[d].tax8)  : '-'}</td>
-        ${has0 ? `<td style="${tD2}">${dayData[d].tax0 > 0 ? fmt(dayData[d].tax0) : '-'}</td>` : ''}
-        <td style="${tD2}font-weight:600;">${fmt(dayData[d].total)}</td>
-      </tr>`;
-    }).join('');
-    dailyHtml += `<div style="margin-bottom:22px;">
-      <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;">${payIcons2[pay] || '💰'} ${pay}</div>
-      <div style="overflow-x:auto;">
-      <table style="${tS2}">
-        <thead><tr>
-          <th style="${tHL2}">日付</th>
-          <th style="${tH2}">件数</th>
-          <th style="${tH2}">10%（税込）</th>
-          <th style="${tH2}">8%（税込）</th>
-          ${has0 ? `<th style="${tH2}">非課税</th>` : ''}
-          <th style="${tH2}">合計</th>
-        </tr></thead>
-        <tbody>${rows2}</tbody>
-        <tfoot><tr style="${tF2}">
-          <td style="${tDL2}">合計（${days.length}日）</td>
-          <td style="${tD2}">${sumCount}件</td>
-          <td style="${tD2}">${sum10 > 0 ? fmt(sum10) : '-'}</td>
-          <td style="${tD2}">${sum8  > 0 ? fmt(sum8)  : '-'}</td>
-          ${has0 ? `<td style="${tD2}">${fmt(sum0)}</td>` : ''}
-          <td style="${tD2}font-weight:600;">${fmt(sumTotal)}</td>
-        </tr></tfoot>
-      </table>
-      </div>
-    </div>`;
-  });
-
-  document.getElementById('daily-summary-list').innerHTML = mR.length === 0
-    ? '<div class="empty-msg">データがありません</div>'
-    : (dailyHtml || '<div class="empty-msg">データがありません</div>');
 }
 
 // ============================================================
@@ -1920,87 +1820,139 @@ function initBackupYears() {
     String(new Date().getMonth() + 1).padStart(2, '0');
 }
 
+// ============================================================
+// 小口現金
+// ============================================================
+function setPettyType(t) {
+  pettyType = t;
+  document.getElementById('petty-btn-in').className  = 'petty-type-btn' + (t === 'in'  ? ' active-in'  : '');
+  document.getElementById('petty-btn-out').className = 'petty-type-btn' + (t === 'out' ? ' active-out' : '');
+}
+
+function renderPettyMonthLabel() {
+  document.getElementById('petty-month-label').textContent =
+    pettyMonth.getFullYear() + '年' + (pettyMonth.getMonth() + 1) + '月';
+}
+
+function changePettyMonth(d) {
+  pettyMonth = new Date(pettyMonth.getFullYear(), pettyMonth.getMonth() + d, 1);
+  renderPettyMonthLabel();
+  renderPettyCash();
+}
+
+function renderPettyCash() {
+  // 全期間の残高
+  const totalBalance = pettyCash.reduce((s, e) => s + (e.type === 'in' ? e.amount : -e.amount), 0);
+  const balEl = document.getElementById('petty-balance');
+  balEl.textContent = fmt(Math.abs(totalBalance));
+  if (totalBalance < 0) {
+    balEl.textContent = '−' + fmt(Math.abs(totalBalance));
+    balEl.style.color = 'var(--accent)';
+  } else {
+    balEl.style.color = 'var(--text)';
+  }
+
+  // 今月の入金・出金
+  const y = pettyMonth.getFullYear(), m = pettyMonth.getMonth();
+  const monthEntries = pettyCash.filter(e => {
+    const d = new Date(e.date);
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+  const monthIn  = monthEntries.filter(e => e.type === 'in').reduce((s, e)  => s + e.amount, 0);
+  const monthOut = monthEntries.filter(e => e.type === 'out').reduce((s, e) => s + e.amount, 0);
+  document.getElementById('petty-month-in').textContent  = fmt(monthIn);
+  document.getElementById('petty-month-out').textContent = fmt(monthOut);
+
+  // 明細リスト（新しい順）
+  const listEl = document.getElementById('petty-list');
+  if (monthEntries.length === 0) {
+    listEl.innerHTML = '<div class="empty-msg">この月の記録はありません</div>';
+    return;
+  }
+  const sorted = [...monthEntries].sort((a, b) => {
+    if (b.date !== a.date) return b.date.localeCompare(a.date);
+    return b.timestamp - a.timestamp;
+  });
+  listEl.innerHTML = sorted.map(e => {
+    const d = new Date(e.date + 'T00:00:00');
+    const dateStr = (d.getMonth() + 1) + '/' + d.getDate();
+    const isIn = e.type === 'in';
+    return `<div class="petty-entry">
+      <div class="petty-entry-date">${dateStr}</div>
+      <div class="petty-entry-memo">${e.memo || '—'}</div>
+      <div class="petty-entry-amount ${isIn ? 'in' : 'out'}">${isIn ? '+' : '−'}${fmt(e.amount)}</div>
+      <button class="petty-entry-delete" onclick="deletePettyCash('${e.id}')">×</button>
+    </div>`;
+  }).join('');
+}
+
+async function addPettyCash() {
+  const date   = document.getElementById('petty-date').value;
+  const memo   = document.getElementById('petty-memo').value.trim();
+  const amount = parseInt(document.getElementById('petty-amount').value);
+
+  if (!date)                          { alert('日付を入力してください'); return; }
+  if (!memo)                          { alert('内容を入力してください'); return; }
+  if (isNaN(amount) || amount <= 0)   { alert('金額を入力してください'); return; }
+  if (!pettyCashCol)                  { alert('Firebase に接続されていません'); return; }
+
+  const btn = document.getElementById('btn-petty-save');
+  btn.disabled = true;
+  try {
+    await pettyCashCol.add({ date, type: pettyType, memo, amount, timestamp: Date.now() });
+    document.getElementById('petty-memo').value   = '';
+    document.getElementById('petty-amount').value = '';
+    showToast('記録しました ✓');
+  } catch(e) {
+    showToast('保存に失敗しました');
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deletePettyCash(id) {
+  if (!confirm('この記録を削除しますか？')) return;
+  pettyCash = pettyCash.filter(e => e.id !== id);
+  renderPettyCash();
+  try {
+    await pettyCashCol.doc(id).delete();
+    showToast('削除しました');
+  } catch(e) {
+    showToast('削除に失敗しました');
+  }
+}
+
 function exportCSV(mode) {
   if (!records || records.length === 0) {
     document.getElementById('backup-result').textContent = 'データがありません';
     return;
   }
   let data = records;
-  let periodLabel = '全期間';
-  let filename = 'tsumugi_集計表_全期間_' + new Date().toISOString().slice(0, 10) + '.csv';
+  let filename = 'tsumugi_全データ_' + new Date().toISOString().slice(0, 10) + '.csv';
   if (mode === 'month') {
     const y = document.getElementById('backup-year').value;
     const m = document.getElementById('backup-month').value;
     const ym = y + '-' + m;
     data = records.filter(r => r.date && r.date.startsWith(ym));
-    periodLabel = y + '年' + parseInt(m) + '月';
-    filename = 'tsumugi_集計表_' + y + '年' + parseInt(m) + '月_' + new Date().toISOString().slice(0, 10) + '.csv';
+    filename = 'tsumugi_' + y + '年' + parseInt(m) + '月_' + new Date().toISOString().slice(0, 10) + '.csv';
     if (data.length === 0) {
       document.getElementById('backup-result').textContent = y + '年' + parseInt(m) + '月のデータがありません';
       return;
     }
   }
-
-  const allMethods = ['現金', 'クレジットカード', 'PayPay・電子マネー', 'BASEつむぎ', 'BASEちきゅらば'];
-
-  // 金種別集計
-  const payTotals = {};
-  const payCounts = {};
-  allMethods.forEach(p => { payTotals[p] = 0; payCounts[p] = 0; });
-  data.forEach(r => {
-    const k = r.payment || '現金';
-    payTotals[k] = (payTotals[k] || 0) + (r.amount || 0);
-    payCounts[k] = (payCounts[k] || 0) + 1;
-  });
-  const grandTotal = data.reduce((s, r) => s + (r.amount || 0), 0);
-  const grandCount = data.length;
-
-  // 税種別集計
-  const taxTotals = {};
-  const taxCounts = {};
-  data.forEach(r => {
-    if (r.items && r.items.length) {
-      const counted = new Set();
-      r.items.forEach(it => {
-        const rate = (typeof it.taxRate === 'number') ? it.taxRate : (typeof r.tax === 'number' ? r.tax : 10);
-        if (!taxTotals[rate]) { taxTotals[rate] = 0; taxCounts[rate] = 0; }
-        taxTotals[rate] += it.price || 0;
-        if (!counted.has(rate)) { taxCounts[rate]++; counted.add(rate); }
-      });
-    } else {
-      const rate = (typeof r.tax === 'number' && r.tax !== null) ? r.tax : 10;
-      if (!taxTotals[rate]) { taxTotals[rate] = 0; taxCounts[rate] = 0; }
-      taxTotals[rate] += r.amount || 0;
-      taxCounts[rate]++;
-    }
-  });
-  const ratesSorted = Object.keys(taxTotals).map(Number).sort((a, b) => b - a);
-
-  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
-  const rows = [];
-
-  rows.push(q('【売上集計表】') + ',' + q(periodLabel));
-  rows.push('');
-  rows.push(q('【金種別集計】'));
-  rows.push([q('支払方法'), q('件数'), q('金額（税込）')].join(','));
-  allMethods.forEach(p => {
-    rows.push([q(p), q(payCounts[p] + '件'), q(payTotals[p])].join(','));
-  });
-  rows.push([q('合計'), q(grandCount + '件'), q(grandTotal)].join(','));
-  rows.push('');
-  rows.push(q('【税種別集計】'));
-  rows.push([q('税区分'), q('件数'), q('税込金額'), q('消費税額'), q('税抜金額')].join(','));
-  ratesSorted.forEach(rate => {
-    const inc = taxTotals[rate];
-    const taxAmt = rate > 0 ? Math.round(inc - inc / (1 + rate / 100)) : 0;
-    const exc = inc - taxAmt;
-    const lbl = rate === 8 ? '軽減税率 8%' : (rate === 0 ? '非課税 0%' : '標準税率 ' + rate + '%');
-    rows.push([q(lbl), q(taxCounts[rate] + '件'), q(inc), q(taxAmt), q(exc)].join(','));
-  });
-  const grandTaxAmt = ratesSorted.reduce((s, r) => s + (r > 0 ? Math.round(taxTotals[r] - taxTotals[r] / (1 + r / 100)) : 0), 0);
-  rows.push([q('合計'), q(grandCount + '件'), q(grandTotal), q(grandTaxAmt), q(grandTotal - grandTaxAmt)].join(','));
-
-  const csv = '﻿' + rows.join('\n');
+  const header = ['日付', 'スタッフ', 'お客様名', 'メニュー', '金額', '税額', '支払方法', '次回予約'];
+  const rows = data.map(r => [
+    r.date || '',
+    r.staff || '',
+    r.client || '',
+    r.menu || '',
+    r.amount || 0,
+    r.tax || 0,
+    r.payment || '現金',
+    r.nextResv || ''
+  ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
+  const csv = '﻿' + header.join(',') + '\n' + rows.join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2008,11 +1960,9 @@ function exportCSV(mode) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-  document.getElementById('backup-result').textContent = periodLabel + 'の集計表をダウンロードしました（' + grandCount + '件分）';
+  document.getElementById('backup-result').textContent = data.length + '件をダウンロードしました';
 }
 
 </script>
 </body>
 </html>
-
-
