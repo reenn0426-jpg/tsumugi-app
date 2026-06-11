@@ -393,6 +393,8 @@ service cloud.firestore {
           <option value="現金">💴 現金</option>
           <option value="クレジットカード">💳 クレジットカード</option>
           <option value="PayPay・電子マネー">📱 PayPay・電子マネー</option>
+          <option value="BASEつむぎ">🛍 BASEつむぎ</option>
+          <option value="BASEちきゅらば">🛍 BASEちきゅらば</option>
         </select>
       </div>
       <button class="checkout-btn" id="btn-checkout" onclick="checkout()" disabled>会計する →</button>
@@ -1658,9 +1660,9 @@ function renderMonthly() {
     </div>`).join('');
 
   // 支払い方法内訳
-  const paymentMethods = ['現金', 'クレジットカード', 'PayPay・電子マネー'];
-  const payColors = { '現金': '#8b5e3c', 'クレジットカード': '#4a7c59', 'PayPay・電子マネー': '#6c5ce7' };
-  const payIcons  = { '現金': '💴', 'クレジットカード': '💳', 'PayPay・電子マネー': '📱' };
+  const paymentMethods = ['現金', 'クレジットカード', 'PayPay・電子マネー', 'BASEつむぎ', 'BASEちきゅらば'];
+  const payColors = { '現金': '#8b5e3c', 'クレジットカード': '#4a7c59', 'PayPay・電子マネー': '#6c5ce7', 'BASEつむぎ': '#e17055', 'BASEちきゅらば': '#00b894' };
+  const payIcons  = { '現金': '💴', 'クレジットカード': '💳', 'PayPay・電子マネー': '📱', 'BASEつむぎ': '🛍', 'BASEちきゅらば': '🛍' };
   const payTotals = {};
   paymentMethods.forEach(p => { payTotals[p] = 0; });
   mR.forEach(r => {
@@ -1712,7 +1714,7 @@ function renderMonthly() {
         const v = payTotals[p] || 0;
         const cnt = mR.filter(r => (r.payment || '現金') === p).length;
         return `<div class="bar-row">
-          <div class="bar-label" style="width:90px;text-align:left;font-size:10px;">${payIcons[p]} ${p}</div>
+          <div class="bar-label" style="width:110px;text-align:left;font-size:10px;">${payIcons[p]} ${p}</div>
           <div class="bar-wrap"><div class="bar-fill" style="width:${Math.max(v / maxP * 100, v > 0 ? 4 : 0)}%;background:${payColors[p]};">
             ${v > 0 ? '<span>' + fmt(v) + '(' + cnt + '件)</span>' : ''}
           </div></div>
